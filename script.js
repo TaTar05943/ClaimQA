@@ -419,7 +419,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // ... (โค้ดส่วนอื่นๆ ของ script.js)
+   
 
     // --- ฟังก์ชัน Export to Excel ---
     function exportToExcel() {
@@ -526,7 +526,7 @@ document.addEventListener('DOMContentLoaded', () => {
             successToastBootstrap.show();
         }
     }
-// ... (โค้ดส่วนอื่นๆ ของ script.js)
+
 
     // --- Event Listeners ---
     calculateBtn.addEventListener('click', calculatePPM);
