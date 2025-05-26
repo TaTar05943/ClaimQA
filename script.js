@@ -269,7 +269,7 @@ document.addEventListener('DOMContentLoaded', () => {
         displayHistory(); // Refresh history list in modal
     }
 
-    // --- ฟังก์ชันแสดงข้อมูลย้อนหลังใน Model ---
+    // --- ฟังก์ชันแสดงข้อมูลย้อนหลังใน Modal ---
     function displayHistory() {
         historyList.innerHTML = '';
         let history = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]');
@@ -419,20 +419,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-   
-
     // --- ฟังก์ชัน Export to Excel ---
     function exportToExcel() {
-        console.log('--- Starting exportToExcel function ---');
-
         // Ensure latest results are calculated before export
         calculatePPM(); // This will update latestCalculatedResults
-        console.log('latestCalculatedResults after calculatePPM:', JSON.parse(JSON.stringify(latestCalculatedResults))); // Deep copy to prevent mutation issues in console
 
         if (!latestCalculatedResults || (!Object.keys(latestCalculatedResults.individual).length && !Object.keys(latestCalculatedResults.overall).length)) {
              successToastBody.textContent = 'ไม่มีข้อมูลสำหรับ Export!';
              successToastBootstrap.show();
-             console.warn('No data available for export.');
              return;
         }
 
@@ -445,8 +439,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (latestCalculatedResults.individual[group.id]) {
                 Object.keys(latestCalculatedResults.individual[group.id]).forEach(model => {
                     const result = latestCalculatedResults.individual[group.id][model];
-                    // Only include if there was input (claim or sale was not empty string)
-                    if (result.claim !== '' || result.sale !== '') {
+                    if (result.claim !== '' || result.sale !== '') { // Only include if there was input
                          individualPPMData.push([
                             group.item,
                             model,
@@ -459,17 +452,15 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        console.log('individualPPMData (Sheet 1):', individualPPMData);
         if (individualPPMData.length > 1) { // Check if there's actual data beyond headers
             datas.push({
                 sheetData: individualPPMData,
                 sheetName: 'PPM รายรุ่น',
                 sheetHeader: individualPPMData[0],
                 columnWidths: [15, 15, 15, 15, 15],
+                // filter by column name
+                // sheetFilter: ['Item', 'Model', 'Claim', 'Sale', 'PPM'],
             });
-            console.log('Sheet 1 added to datas array.');
-        } else {
-            console.warn('No data for Sheet 1 (Individual PPM Results).');
         }
 
 
@@ -488,43 +479,31 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        console.log('overallPPMData (Sheet 2):', overallPPMData);
         if (overallPPMData.length > 1) {
              datas.push({
                 sheetData: overallPPMData,
                 sheetName: 'PPM สรุป',
                 sheetHeader: overallPPMData[0],
                 columnWidths: [15, 20, 20, 20],
+                // sheetFilter: ['Item', 'Total Claim', 'Total Sale', 'Overall PPM'],
             });
-            console.log('Sheet 2 added to datas array.');
-        } else {
-            console.warn('No data for Sheet 2 (Overall PPM Results).');
         }
 
-        console.log('Final datas array for ExportJsonExcel:', datas);
         if (datas.length === 0) {
             successToastBody.textContent = 'ไม่มีข้อมูลเพียงพอสำหรับ Export!';
             successToastBootstrap.show();
-            console.warn('No sheets generated for export.');
             return;
         }
 
-        try {
-            const option = {};
-            option.fileName = `Claim_PPM_Report_${new Date().toISOString().slice(0, 10)}`;
-            option.datas = datas;
-            console.log('Export options:', option);
+        const option = {};
+        option.fileName = `Claim_PPM_Report_${new Date().toISOString().slice(0, 10)}`; // e.g., Claim_PPM_Report_2024-05-27
+        option.datas = datas;
 
-            const toExcel = new ExportJsonExcel(option);
-            toExcel.saveExcel();
-            console.log('ExportJsonExcel.saveExcel() called successfully.');
-            successToastBody.textContent = 'ส่งออกข้อมูลเป็น Excel เรียบร้อยแล้ว!';
-            successToastBootstrap.show();
-        } catch (e) {
-            console.error('Error during Excel export:', e);
-            successToastBody.textContent = 'เกิดข้อผิดพลาดในการส่งออก Excel!';
-            successToastBootstrap.show();
-        }
+        const toExcel = new ExportJsonExcel(option);
+        toExcel.saveExcel();
+
+        successToastBody.textContent = 'ส่งออกข้อมูลเป็น Excel เรียบร้อยแล้ว!';
+        successToastBootstrap.show();
     }
 
 
