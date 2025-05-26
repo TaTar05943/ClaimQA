@@ -34,12 +34,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const successToastBootstrap = bootstrap.Toast.getOrCreateInstance(successToast);
     const successToastBody = document.getElementById('successToastBody');
 
-    // Dashboard elements and Chart.js variables are REMOVED
-    // let overallPPMChart, claimDistributionChart, historicalPPMChart; // REMOVED
-
     const LOCAL_STORAGE_KEY = 'claim_data_history';
 
-    // latestCalculatedResults will now only store data relevant for export
     let latestCalculatedResults = {
         individual: {},
         overall: {}
@@ -60,11 +56,33 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             `;
             container.appendChild(entryDiv);
+
+            // Add event listeners to each input field to check for changes
+            const claimInput = document.getElementById(`${group.id}-${model}-claim`);
+            const saleInput = document.getElementById(`${group.id}-${model}-sale`);
+            claimInput.addEventListener('input', checkInputsAndToggleSaveButton);
+            saleInput.addEventListener('input', checkInputsAndToggleSaveButton);
         });
     }
 
     // สร้างช่องกรอกข้อมูลสำหรับทุกกลุ่ม
     customerGroups.forEach(group => createInputFields(group));
+
+    // --- ฟังก์ชันตรวจสอบช่องกรอกข้อมูลและเปิด/ปิดปุ่มบันทึก ---
+    function checkInputsAndToggleSaveButton() {
+        let hasAnyInput = false;
+        customerGroups.forEach(group => {
+            group.models.forEach(model => {
+                const claimInput = document.getElementById(`${group.id}-${model}-claim`);
+                const saleInput = document.getElementById(`${group.id}-${model}-sale`);
+                if (claimInput.value.trim() !== '' || saleInput.value.trim() !== '') {
+                    hasAnyInput = true;
+                }
+            });
+        });
+        saveDataBtn.disabled = !hasAnyInput; // Enable if any input, disable otherwise
+    }
+
 
     // --- Helper function to get current input data ---
     function getCurrentInputData() {
@@ -104,6 +122,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         // Trigger calculation after loading data
         calculatePPM();
+        checkInputsAndToggleSaveButton(); // Update button state after loading data
     }
 
     // --- ฟังก์ชันหลักสำหรับคำนวณ PPM ทั้งหมด ---
@@ -241,16 +260,38 @@ document.addEventListener('DOMContentLoaded', () => {
         if (hasErrorOccurred) {
             toastBootstrap.show(); // แสดง Toast เมื่อมีข้อผิดพลาด
             resultsOutput.innerHTML = '<p class="text-danger text-center py-3">มีข้อผิดพลาดในการกรอกข้อมูล กรุณาแก้ไข.</p>';
+            saveDataBtn.disabled = true; // Ensure save button is disabled if there are errors
         } else if (!hasAnyValidInputOverall) {
             const noDataMessage = document.createElement('p');
             noDataMessage.classList.add('text-muted', 'text-center', 'py-3');
             noDataMessage.textContent = 'กรุณากรอกข้อมูลยอดเคลมหรือยอดขายอย่างน้อยหนึ่งรุ่นในกลุ่มใดๆ เพื่อคำนวณ.';
             resultsOutput.appendChild(noDataMessage);
+            saveDataBtn.disabled = true; // Ensure save button is disabled if no data is entered
+        } else {
+             checkInputsAndToggleSaveButton(); // Re-check after calculation to enable if valid
         }
     }
 
     // --- ฟังก์ชันบันทึกข้อมูล ---
     function saveCurrentData() {
+        // Double check if data is valid before saving
+        let hasAnyValidInput = false;
+        customerGroups.forEach(group => {
+            group.models.forEach(model => {
+                const claimInput = document.getElementById(`${group.id}-${model}-claim`);
+                const saleInput = document.getElementById(`${group.id}-${model}-sale`);
+                if (claimInput.value.trim() !== '' || saleInput.value.trim() !== '') {
+                    hasAnyValidInput = true;
+                }
+            });
+        });
+
+        if (!hasAnyValidInput) {
+            successToastBody.textContent = 'กรุณากรอกข้อมูลอย่างน้อยหนึ่งช่องก่อนบันทึก!';
+            toastBootstrap.show(); // Use error toast for this
+            return;
+        }
+
         const currentData = getCurrentInputData();
         const timestamp = new Date();
         const formattedTimestamp = timestamp.toLocaleString('th-TH', {
@@ -324,13 +365,14 @@ document.addEventListener('DOMContentLoaded', () => {
         let history = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]');
         if (index >= 0 && index < history.length) {
             const selectedEntry = history[index];
-            setInputData(selectedEntry.inputData); // Populate inputs
+            setInputData(selectedEntry.inputData); // Populate inputs (this calls calculatePPM and checkInputsAndToggleSaveButton)
             latestCalculatedResults = selectedEntry.calculatedResults; // Restore calculated results
             // Manually re-display results based on loaded data
             displayCalculatedResultsFromLoadedData(latestCalculatedResults);
             bootstrap.Modal.getInstance(document.getElementById('historyModal')).hide(); // Close modal
             successToastBody.textContent = 'โหลดข้อมูลย้อนหลังเรียบร้อยแล้ว!';
             successToastBootstrap.show();
+            checkInputsAndToggleSaveButton(); // Re-check button state after loading history
         }
     }
 
@@ -347,7 +389,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (results.individual[group.id]) {
                 Object.keys(results.individual[group.id]).forEach(model => {
                     const modelResult = results.individual[group.id][model];
-                    if (modelResult.claim !== '' || modelResult.sale !== '') { // Only display if there was input
+                    // Only display if there was input or valid calculated result (not just empty string)
+                    if (modelResult.claim !== '' || modelResult.sale !== '' || (isFinite(modelResult.ppm) && modelResult.ppm > 0)) {
                         hasAnyResults = true;
                         const ppm = modelResult.ppm;
                         const resultDiv = document.createElement('div');
@@ -372,25 +415,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Display overall results
             if (results.overall[group.id]) {
-                hasAnyResults = true;
+                // Ensure overall results are only displayed if there was input for that group
                 const overall = results.overall[group.id];
-                const overallResultsContainer = document.getElementById(group.overallResultsId);
-                overallResultsContainer.innerHTML = `
-                    <div class="mb-2">
-                        <strong class="me-1">ยอดเคลมรวม:</strong>
-                        <span class="badge bg-secondary fs-6">${overall.totalClaim.toLocaleString()}</span>
-                    </div>
-                    <div class="mb-2">
-                        <strong class="me-1">ยอดขายรวม:</strong>
-                        <span class="badge bg-secondary fs-6">${overall.totalSale.toLocaleString()}</span>
-                    </div>
-                    <div class="mb-2">
-                        <strong class="me-1">PPM รวม TH ${group.item}:</strong>
-                        <span class="badge ${overall.overallPPM === 'Infinity' || overall.overallPPM > group.ppmTarget ? 'bg-danger' : 'bg-primary'} fs-6">
-                            ${overall.overallPPM === 'Infinity' ? 'สูงมาก' : overall.overallPPM.toFixed(2)}
-                        </span>
-                    </div>
-                `;
+                if (overall.totalClaim > 0 || overall.totalSale > 0) { // Check if there was any actual data for the overall sum
+                     hasAnyResults = true;
+                     const overallResultsContainer = document.getElementById(group.overallResultsId);
+                     overallResultsContainer.innerHTML = `
+                         <div class="mb-2">
+                             <strong class="me-1">ยอดเคลมรวม:</strong>
+                             <span class="badge bg-secondary fs-6">${overall.totalClaim.toLocaleString()}</span>
+                         </div>
+                         <div class="mb-2">
+                             <strong class="me-1">ยอดขายรวม:</strong>
+                             <span class="badge bg-secondary fs-6">${overall.totalSale.toLocaleString()}</span>
+                         </div>
+                         <div class="mb-2">
+                             <strong class="me-1">PPM รวม TH ${group.item}:</strong>
+                             <span class="badge ${overall.overallPPM === 'Infinity' || overall.overallPPM > group.ppmTarget ? 'bg-danger' : 'bg-primary'} fs-6">
+                                 ${overall.overallPPM === 'Infinity' ? 'สูงมาก' : overall.overallPPM.toFixed(2)}
+                             </span>
+                         </div>
+                     `;
+                } else {
+                     document.getElementById(group.overallResultsId).innerHTML = `<p class="text-muted text-center py-3">ยังไม่มีข้อมูลสำหรับ TH ${group.item}.</p>`;
+                }
+
             } else {
                  document.getElementById(group.overallResultsId).innerHTML = `<p class="text-muted text-center py-3">ยังไม่มีข้อมูลสำหรับ TH ${group.item}.</p>`;
             }
@@ -508,8 +557,6 @@ document.addEventListener('DOMContentLoaded', () => {
         successToastBootstrap.show();
     }
 
-    // Dashboard Functions are REMOVED
-
     // --- ฟังก์ชันสำหรับเคลียร์ค่าทั้งหมด ---
     function clearAllInputsAndResults() {
         // Clear input fields
@@ -520,7 +567,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 claimInput.value = '';
                 saleInput.value = '';
                 claimInput.classList.remove('is-invalid', 'is-valid');
-                saleInput.classList.remove('is-invalid', 'is-valid');
+                saleInput.classList.remove('is-valid');
             });
         });
 
@@ -541,6 +588,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         successToastBody.textContent = 'เคลียร์ข้อมูลทั้งหมดเรียบร้อยแล้ว!';
         successToastBootstrap.show();
+
+        // After clearing, disable the save button
+        checkInputsAndToggleSaveButton();
     }
 
 
@@ -549,13 +599,12 @@ document.addEventListener('DOMContentLoaded', () => {
     saveDataBtn.addEventListener('click', saveCurrentData);
     loadHistoryBtn.addEventListener('click', displayHistory);
     exportExcelBtn.addEventListener('click', exportToExcel);
-    // showDashboardBtn.addEventListener('click', renderDashboardCharts); // REMOVED
-    // dashboardModal.addEventListener('shown.bs.modal', renderDashboardCharts); // REMOVED
-    // dashboardModal.addEventListener('hidden.bs.modal', destroyCharts); // REMOVED
-    refreshBtn.addEventListener('click', clearAllInputsAndResults); // Event listener for the new refresh button
+    refreshBtn.addEventListener('click', clearAllInputsAndResults);
     clearAllHistoryBtn.addEventListener('click', clearAllHistory);
 
 
-    // Initial calculation and display of results (if any data is pre-filled, though usually empty on first load)
-    calculatePPM();
+    // Initial setup when the page loads
+    customerGroups.forEach(group => createInputFields(group)); // Ensure inputs are created before calling check
+    checkInputsAndToggleSaveButton(); // Initial check to set the button state
+    calculatePPM(); // Initial calculation and display of results
 });
