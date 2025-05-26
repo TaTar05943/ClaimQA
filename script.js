@@ -22,6 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const saveDataBtn = document.getElementById('saveDataBtn');
     const loadHistoryBtn = document.getElementById('loadHistoryBtn');
     const exportExcelBtn = document.getElementById('exportExcelBtn');
+    const refreshBtn = document.getElementById('refreshBtn');
     const resultsOutput = document.getElementById('resultsOutput');
     const historyList = document.getElementById('historyList');
     const clearAllHistoryBtn = document.getElementById('clearAllHistoryBtn');
@@ -33,7 +34,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const successToastBootstrap = bootstrap.Toast.getOrCreateInstance(successToast);
     const successToastBody = document.getElementById('successToastBody');
 
-    const LOCAL_STORAGE_KEY = 'claim_data_history'; // Key for localStorage
+    // Dashboard elements and Chart.js variables are REMOVED
+    // let overallPPMChart, claimDistributionChart, historicalPPMChart; // REMOVED
+
+    const LOCAL_STORAGE_KEY = 'claim_data_history';
+
+    // latestCalculatedResults will now only store data relevant for export
+    let latestCalculatedResults = {
+        individual: {},
+        overall: {}
+    };
 
     // --- ฟังก์ชันสำหรับสร้างช่องกรอกข้อมูล ---
     function createInputFields(group) {
@@ -97,11 +107,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- ฟังก์ชันหลักสำหรับคำนวณ PPM ทั้งหมด ---
-    let latestCalculatedResults = {
-        individual: {},
-        overall: {}
-    }; // Store latest results for export
-
     function calculatePPM() {
         resultsOutput.innerHTML = ''; // Clear previous individual results
         document.getElementById('overallBarrelResults').innerHTML = '<p class="text-muted text-center py-3">ยังไม่มีข้อมูลสำหรับ TH Barrel.</p>';
@@ -332,8 +337,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- ฟังก์ชันแสดงผลลัพธ์จากการโหลดข้อมูล (เนื่องจาก calculatePPM ล้างผลลัพธ์) ---
     function displayCalculatedResultsFromLoadedData(results) {
         resultsOutput.innerHTML = ''; // Clear previous individual results
-        document.getElementById('overallBarrelResults').innerHTML = '';
-        document.getElementById('overallLowerResults').innerHTML = '';
+        document.getElementById('overallBarrelResults').innerHTML = '<p class="text-muted text-center py-3">ยังไม่มีข้อมูลสำหรับ TH Barrel.</p>'; // Reset
+        document.getElementById('overallLowerResults').innerHTML = '<p class="text-muted text-center py-3">ยังไม่มีข้อมูลสำหรับ TH Lower.</p>'; // Reset
 
         let hasAnyResults = false;
 
@@ -432,7 +437,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const datas = [];
 
-        // Sheet 1: Individual PPM Results
+        // Sheet 1: Individual PPM Results (includes models for export)
         const individualPPMData = [];
         individualPPMData.push(['Item', 'Model', 'Claim', 'Sale', 'PPM']);
         customerGroups.forEach(group => {
@@ -458,8 +463,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 sheetName: 'PPM รายรุ่น',
                 sheetHeader: individualPPMData[0],
                 columnWidths: [15, 15, 15, 15, 15],
-                // filter by column name
-                // sheetFilter: ['Item', 'Model', 'Claim', 'Sale', 'PPM'],
             });
         }
 
@@ -485,7 +488,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 sheetName: 'PPM สรุป',
                 sheetHeader: overallPPMData[0],
                 columnWidths: [15, 20, 20, 20],
-                // sheetFilter: ['Item', 'Total Claim', 'Total Sale', 'Overall PPM'],
             });
         }
 
@@ -496,7 +498,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const option = {};
-        option.fileName = `Claim_PPM_Report_${new Date().toISOString().slice(0, 10)}`; // e.g., Claim_PPM_Report_2024-05-27
+        option.fileName = `Claim_PPM_Report_${new Date().toISOString().slice(0, 10)}`;
         option.datas = datas;
 
         const toExcel = new ExportJsonExcel(option);
@@ -506,14 +508,54 @@ document.addEventListener('DOMContentLoaded', () => {
         successToastBootstrap.show();
     }
 
+    // Dashboard Functions are REMOVED
+
+    // --- ฟังก์ชันสำหรับเคลียร์ค่าทั้งหมด ---
+    function clearAllInputsAndResults() {
+        // Clear input fields
+        customerGroups.forEach(group => {
+            group.models.forEach(model => {
+                const claimInput = document.getElementById(`${group.id}-${model}-claim`);
+                const saleInput = document.getElementById(`${group.id}-${model}-sale`);
+                claimInput.value = '';
+                saleInput.value = '';
+                claimInput.classList.remove('is-invalid', 'is-valid');
+                saleInput.classList.remove('is-invalid', 'is-valid');
+            });
+        });
+
+        // Clear displayed results
+        resultsOutput.innerHTML = '<p class="text-muted text-center py-3">ยังไม่มีข้อมูลสำหรับการคำนวณ โปรดกรอกข้อมูลแล้วกดคำนวณ.</p>';
+        document.getElementById('overallBarrelResults').innerHTML = '<p class="text-muted text-center py-3">ยังไม่มีข้อมูลสำหรับ TH Barrel.</p>';
+        document.getElementById('overallLowerResults').innerHTML = '<p class="text-muted text-center py-3">ยังไม่มีข้อมูลสำหรับ TH Lower.</p>';
+
+        // Reset latest calculated results
+        latestCalculatedResults = {
+            individual: {},
+            overall: {}
+        };
+
+        // Optionally, clear any toasts if active
+        toastBootstrap.hide();
+        successToastBootstrap.hide();
+
+        successToastBody.textContent = 'เคลียร์ข้อมูลทั้งหมดเรียบร้อยแล้ว!';
+        successToastBootstrap.show();
+    }
+
 
     // --- Event Listeners ---
     calculateBtn.addEventListener('click', calculatePPM);
     saveDataBtn.addEventListener('click', saveCurrentData);
-    loadHistoryBtn.addEventListener('click', displayHistory); // Call displayHistory when modal is opened
+    loadHistoryBtn.addEventListener('click', displayHistory);
     exportExcelBtn.addEventListener('click', exportToExcel);
+    // showDashboardBtn.addEventListener('click', renderDashboardCharts); // REMOVED
+    // dashboardModal.addEventListener('shown.bs.modal', renderDashboardCharts); // REMOVED
+    // dashboardModal.addEventListener('hidden.bs.modal', destroyCharts); // REMOVED
+    refreshBtn.addEventListener('click', clearAllInputsAndResults); // Event listener for the new refresh button
     clearAllHistoryBtn.addEventListener('click', clearAllHistory);
 
+
     // Initial calculation and display of results (if any data is pre-filled, though usually empty on first load)
-    calculatePPM(); // To set initial state of result sections and ensure latestCalculatedResults is populated if inputs have default values
+    calculatePPM();
 });
